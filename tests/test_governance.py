@@ -292,7 +292,61 @@ def test_observability_trace_id_and_spans():
 
 
 # -----------------------------------------------------------------------------
-# 6. Standalone Acceptance Demo Script Test
+# 6. State Machine Invariants & Walkable Lifecycle Tests
+# -----------------------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    "current_stage,illegal_target",
+    [
+        (Stage.ENROLLED, Stage.CREDENTIAL_ISSUED),
+        (Stage.AWAITING_SUBMISSION, Stage.ASSESSED),
+        (Stage.CREDENTIAL_ISSUED, Stage.ENROLLED),
+    ],
+)
+def test_state_machine_rejects_illegal_transitions_parameterized(current_stage, illegal_target):
+    """The FSM must reject illegal jumps, skips, and reversals."""
+    with pytest.raises(IllegalTransition) as exc_info:
+        assert_transition(current=current_stage, target=illegal_target)
+    assert f"Illegal transition from '{current_stage.value}' to '{illegal_target.value}'" in str(exc_info.value)
+
+
+def test_happy_path_walkable():
+    """Validates that the complete happy path is walkable without rejection."""
+    happy_path = [
+        Stage.ENROLLED,
+        Stage.ROOM_ASSIGNED,
+        Stage.AWAITING_SUBMISSION,
+        Stage.SUBMISSION_RECEIVED,
+        Stage.ASSESSED,
+        Stage.ADVERSARY_VERIFIED,
+        Stage.CREDENTIAL_ISSUED,
+    ]
+
+    for i in range(len(happy_path) - 1):
+        curr = happy_path[i]
+        nxt = happy_path[i + 1]
+        assert_transition(curr, nxt)  # Must not raise
+
+
+def test_repository_refuses_illegal_advance():
+    """Repository advance method must enforce assert_transition before mutating state."""
+    from aegis.store.repository import InMemoryRepository
+    from aegis.domain import Student
+
+    repo = InMemoryRepository()
+    student = Student(student_id="std_fsm_1", name="Test Student", email="test@test.com", stage=Stage.ENROLLED)
+    repo.save_student(student)
+
+    # Illegal advance: ENROLLED -> CREDENTIAL_ISSUED
+    with pytest.raises(IllegalTransition):
+        repo.advance("std_fsm_1", Stage.CREDENTIAL_ISSUED)
+
+    # State remains unchanged
+    assert repo.get_student("std_fsm_1").stage == Stage.ENROLLED
+
+
+# -----------------------------------------------------------------------------
+# 7. Standalone Acceptance Demo Script Test
 # -----------------------------------------------------------------------------
 
 def test_governance_check_script_passes():
