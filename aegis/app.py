@@ -284,8 +284,11 @@ async def webhook_submission_received(req: SubmissionWebhookRequest):
 
     # Wake Registrar with state_delta
     prompt = (
-        f"Student {req.student_id} submitted lab artifact for room {req.room_id} "
-        f"(Submission ID: {req.submission_id}). Delegate to the assessor agent to evaluate it."
+        f"Student {req.student_id} submitted lab artifact for room {req.room_id} (Submission ID: {req.submission_id}).\n"
+        f"1. Delegate to the 'assessor' sub-agent to load and evaluate the submission using `load_submission` and `record_assessment`.\n"
+        f"2. Unless the submission is blocked due to policy/injection violation, delegate to the 'adversary' sub-agent to stress-test the patch and record findings using `record_verdict`.\n"
+        f"3. If both assessment passed (score >= 70) AND adversary verdict confirms the patch holds (exploit_held is True), call `issue_credential` to award the credential and advance to CREDENTIAL_ISSUED.\n"
+        f"4. If blocked, failed assessment (< 70), or broken by adversary, notify the student of findings and do NOT call `issue_credential`."
     )
     state_delta = {
         "current_stage": Stage.SUBMISSION_RECEIVED.value,
