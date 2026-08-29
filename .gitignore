@@ -1,0 +1,21 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment variables & secrets (Hard rule: Never commit a secret)
+.env
+.env.*
+!.env.example
+
+# Local SQLite sessions DB
+*.db
+*.sqlite3
+
+# Pytest & Coverage cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ADK & local artifacts
+aegis_sessions.db

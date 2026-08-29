@@ -1,0 +1,9 @@
+google-adk[db]==2.8.0
+google-genai>=0.1.1
+fastapi>=0.110.0
+uvicorn>=0.28.0
+google-cloud-firestore>=2.15.0
+opentelemetry-sdk>=1.24.0
+opentelemetry-exporter-gcp-trace>=1.7.0
+python-dotenv>=1.0.0
+pytest>=8.0.0
