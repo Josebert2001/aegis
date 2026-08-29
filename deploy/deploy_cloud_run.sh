@@ -28,6 +28,11 @@ echo "======================================================================"
 echo
 
 # Deploy container from source directory
+ENV_VARS="USE_FIRESTORE=true,EXPORT_TRACES=true,GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION},MODEL_REGISTRAR=gemini-3.7-flash,MODEL_ASSESSOR=gemini-3.7-flash,MODEL_ADVERSARY=gemini-3.5-flash-lite,SESSION_DB_URL=sqlite:///./aegis_sessions.db"
+if [ -n "${GOOGLE_API_KEY:-}" ]; then
+    ENV_VARS="${ENV_VARS},GOOGLE_API_KEY=${GOOGLE_API_KEY}"
+fi
+
 gcloud run deploy "${SERVICE_NAME}" \
     --source . \
     --region="${REGION}" \
@@ -40,7 +45,7 @@ gcloud run deploy "${SERVICE_NAME}" \
     --cpu="1" \
     --service-account="aegis-registrar@${PROJECT_ID}.iam.gserviceaccount.com" \
     --set-secrets="AEGIS_HMAC_SECRET=aegis-hmac-secret:latest" \
-    --set-env-vars="USE_FIRESTORE=true,EXPORT_TRACES=true,GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION},MODEL_REGISTRAR=gemini-3.7-flash,MODEL_ASSESSOR=gemini-3.7-flash,MODEL_ADVERSARY=gemini-3.5-flash-lite,SESSION_DB_URL=sqlite:///./aegis_sessions.db" \
+    --set-env-vars="${ENV_VARS}" \
     --quiet
 
 # Retrieve the live deployed URL
