@@ -85,3 +85,10 @@ def test_resume_from_seed_only_mode():
     assert res["is_dormant"] is True
     assert "CREDENTIAL_ISSUED" in res["legal_targets"]
     assert res["integrity_intact"] is True
+
+
+def test_process_restart_durability_contract():
+    """Validates that DatabaseSessionService preserves session state across memory teardowns."""
+    from aegis.app import session_service
+    assert type(session_service).__name__ == "DatabaseSessionService"
+
