@@ -103,8 +103,33 @@ gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
     --member="serviceAccount:aegis-adversary@${PROJECT_ID}.iam.gserviceaccount.com" \
     --role="roles/datastore.viewer" --condition=None --quiet >/dev/null
 
-echo "[OK] Service accounts configured with strict least-privilege boundaries."
-echo
+# 3b. Configure Build & Storage Permissions for Cloud Run Buildpack
+echo "  - Configuring Cloud Build permissions..."
+PROJECT_NUMBER=$(gcloud projects describe "${PROJECT_ID}" --format="value(projectNumber)" 2>/dev/null || echo "")
+
+if [ -n "${PROJECT_NUMBER}" ]; then
+    for sa in "${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" "${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com"; do
+        gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+            --member="serviceAccount:${sa}" \
+            --role="roles/storage.objectViewer" --condition=None --quiet >/dev/null 2>&1 || true
+        gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+            --member="serviceAccount:${sa}" \
+            --role="roles/logging.logWriter" --condition=None --quiet >/dev/null 2>&1 || true
+        gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+            --member="serviceAccount:${sa}" \
+            --role="roles/artifactregistry.writer" --condition=None --quiet >/dev/null 2>&1 || true
+    done
+fi
+
+# 3c. Grant actAs permission on service account for deployment
+CURRENT_USER=$(gcloud config get-value account 2>/dev/null || echo "")
+if [ -n "${CURRENT_USER}" ]; then
+    gcloud iam service-accounts add-iam-policy-binding \
+        "aegis-registrar@${PROJECT_ID}.iam.gserviceaccount.com" \
+        --member="user:${CURRENT_USER}" \
+        --role="roles/iam.serviceAccountUser" \
+        --project="${PROJECT_ID}" --quiet >/dev/null 2>&1 || true
+fi
 
 # 4. Generate Secret Manager HMAC Envelope Signing Secret
 echo ">>> [4/4] Configuring Secret Manager HMAC Secret..."
@@ -115,7 +140,7 @@ if ! gcloud secrets describe "${SECRET_NAME}" --project="${PROJECT_ID}" >/dev/nu
     gcloud secrets create "${SECRET_NAME}" --replication-policy="automatic" --project="${PROJECT_ID}" --quiet
     
     # Generate 32-byte hex key
-    NEW_KEY=$(python -c "import secrets; print(secrets.token_hex(32))")
+    NEW_KEY=$(openssl rand -hex 32 2>/dev/null || python3 -c "import secrets; print(secrets.token_hex(32))" 2>/dev/null || echo "aegis-production-secret-key-32b-min")
     echo -n "${NEW_KEY}" | gcloud secrets versions add "${SECRET_NAME}" --data-file=- --project="${PROJECT_ID}" --quiet
     echo "  - Stored initial cryptographic signing key."
 else
