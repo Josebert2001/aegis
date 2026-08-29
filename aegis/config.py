@@ -44,8 +44,11 @@ class Settings:
     use_model_armor: bool = _get_bool_env("USE_MODEL_ARMOR", False)
 
     # Security & Governance
-    # In cloud, this comes from Secret Manager; locally, generated or configured ephemerally
-    hmac_secret_key: str = os.getenv("AEGIS_HMAC_SECRET", "local-ephemeral-secret-key-32b-min")
+    # Secret Manager secret name: aegis-hmac-secret -> Mounted as AEGIS_HMAC_SECRET
+    hmac_secret_key: str = os.getenv(
+        "AEGIS_HMAC_SECRET",
+        os.getenv("AEGIS_SIGNING_KEY", "local-ephemeral-secret-key-32b-min"),
+    )
 
     # API & Service Configuration
     port: int = int(os.getenv("PORT", "8080"))
