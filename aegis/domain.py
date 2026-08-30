@@ -183,3 +183,4 @@ class Credential:
     trace_id: str  # OpenTelemetry trace ID of the reasoning chain
     issued_at: str = field(default_factory=_utcnow_iso)
     signature: Optional[str] = None
+    metadata: Dict[str, str] = field(default_factory=dict)

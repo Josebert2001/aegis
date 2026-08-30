@@ -425,7 +425,8 @@ class FirestoreRepository(BaseRepository):
             "badge_name": credential.badge_name,
             "issued_at": credential.issued_at,
             "trace_id": credential.trace_id,
-            "metadata": credential.metadata,
+            "signature": getattr(credential, "signature", None),
+            "metadata": getattr(credential, "metadata", {}),
         })
         return credential
 
@@ -441,6 +442,7 @@ class FirestoreRepository(BaseRepository):
             badge_name=data["badge_name"],
             issued_at=data.get("issued_at", _utcnow_iso()),
             trace_id=data["trace_id"],
+            signature=data.get("signature"),
             metadata=data.get("metadata", {}),
         )
 
@@ -460,6 +462,7 @@ class FirestoreRepository(BaseRepository):
             badge_name=data["badge_name"],
             issued_at=data.get("issued_at", _utcnow_iso()),
             trace_id=data["trace_id"],
+            signature=data.get("signature"),
             metadata=data.get("metadata", {}),
         )
 
