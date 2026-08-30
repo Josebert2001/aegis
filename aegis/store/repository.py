@@ -302,24 +302,22 @@ class FirestoreRepository(BaseRepository):
         )
 
     def get_latest_submission_for_student(self, student_id: str) -> Optional[Submission]:
-        query = (
-            self.db.collection("submissions")
-            .where("student_id", "==", student_id)
-            .order_by("submitted_at", direction="DESCENDING")
-            .limit(1)
-            .stream()
+        docs = [
+            doc.to_dict()
+            for doc in self.db.collection("submissions").where("student_id", "==", student_id).stream()
+        ]
+        if not docs:
+            return None
+        docs.sort(key=lambda d: d.get("submitted_at", ""), reverse=True)
+        data = docs[0]
+        return Submission(
+            submission_id=data["submission_id"],
+            student_id=data["student_id"],
+            room_id=data["room_id"],
+            artifact=data["artifact"],
+            submitted_at=data.get("submitted_at", _utcnow_iso()),
+            metadata=data.get("metadata", {}),
         )
-        for doc in query:
-            data = doc.to_dict()
-            return Submission(
-                submission_id=data["submission_id"],
-                student_id=data["student_id"],
-                room_id=data["room_id"],
-                artifact=data["artifact"],
-                submitted_at=data.get("submitted_at", _utcnow_iso()),
-                metadata=data.get("metadata", {}),
-            )
-        return None
 
     def save_assessment(self, assessment: Assessment) -> Assessment:
         doc_ref = self.db.collection("assessments").document(assessment.assessment_id)
@@ -352,26 +350,24 @@ class FirestoreRepository(BaseRepository):
         )
 
     def get_latest_assessment_for_student(self, student_id: str) -> Optional[Assessment]:
-        query = (
-            self.db.collection("assessments")
-            .where("student_id", "==", student_id)
-            .order_by("created_at", direction="DESCENDING")
-            .limit(1)
-            .stream()
+        docs = [
+            doc.to_dict()
+            for doc in self.db.collection("assessments").where("student_id", "==", student_id).stream()
+        ]
+        if not docs:
+            return None
+        docs.sort(key=lambda d: d.get("created_at", ""), reverse=True)
+        data = docs[0]
+        return Assessment(
+            assessment_id=data["assessment_id"],
+            submission_id=data["submission_id"],
+            student_id=data["student_id"],
+            score=data["score"],
+            passed=data["passed"],
+            feedback=data["feedback"],
+            criteria_met=data.get("criteria_met", []),
+            created_at=data.get("created_at", _utcnow_iso()),
         )
-        for doc in query:
-            data = doc.to_dict()
-            return Assessment(
-                assessment_id=data["assessment_id"],
-                submission_id=data["submission_id"],
-                student_id=data["student_id"],
-                score=data["score"],
-                passed=data["passed"],
-                feedback=data["feedback"],
-                criteria_met=data.get("criteria_met", []),
-                created_at=data.get("created_at", _utcnow_iso()),
-            )
-        return None
 
     def save_verdict(self, verdict: AdversaryVerdict) -> AdversaryVerdict:
         doc_ref = self.db.collection("verdicts").document(verdict.verdict_id)
@@ -402,25 +398,23 @@ class FirestoreRepository(BaseRepository):
         )
 
     def get_latest_verdict_for_student(self, student_id: str) -> Optional[AdversaryVerdict]:
-        query = (
-            self.db.collection("verdicts")
-            .where("student_id", "==", student_id)
-            .order_by("timestamp", direction="DESCENDING")
-            .limit(1)
-            .stream()
+        docs = [
+            doc.to_dict()
+            for doc in self.db.collection("verdicts").where("student_id", "==", student_id).stream()
+        ]
+        if not docs:
+            return None
+        docs.sort(key=lambda d: d.get("timestamp", ""), reverse=True)
+        data = docs[0]
+        return AdversaryVerdict(
+            verdict_id=data["verdict_id"],
+            submission_id=data["submission_id"],
+            student_id=data["student_id"],
+            exploit_held=data["exploit_held"],
+            attack_payload=data["attack_payload"],
+            logs=data["logs"],
+            timestamp=data.get("timestamp", _utcnow_iso()),
         )
-        for doc in query:
-            data = doc.to_dict()
-            return AdversaryVerdict(
-                verdict_id=data["verdict_id"],
-                submission_id=data["submission_id"],
-                student_id=data["student_id"],
-                exploit_held=data["exploit_held"],
-                attack_payload=data["attack_payload"],
-                logs=data["logs"],
-                timestamp=data.get("timestamp", _utcnow_iso()),
-            )
-        return None
 
     def save_credential(self, credential: Credential) -> Credential:
         doc_ref = self.db.collection("credentials").document(credential.credential_id)
@@ -429,9 +423,9 @@ class FirestoreRepository(BaseRepository):
             "student_id": credential.student_id,
             "cohort_id": credential.cohort_id,
             "badge_name": credential.badge_name,
-            "trace_id": credential.trace_id,
             "issued_at": credential.issued_at,
-            "signature": credential.signature,
+            "trace_id": credential.trace_id,
+            "metadata": credential.metadata,
         })
         return credential
 
@@ -445,30 +439,29 @@ class FirestoreRepository(BaseRepository):
             student_id=data["student_id"],
             cohort_id=data["cohort_id"],
             badge_name=data["badge_name"],
-            trace_id=data["trace_id"],
             issued_at=data.get("issued_at", _utcnow_iso()),
-            signature=data.get("signature"),
+            trace_id=data["trace_id"],
+            metadata=data.get("metadata", {}),
         )
 
     def get_credential_by_student(self, student_id: str) -> Optional[Credential]:
-        query = (
-            self.db.collection("credentials")
-            .where("student_id", "==", student_id)
-            .limit(1)
-            .stream()
+        docs = [
+            doc.to_dict()
+            for doc in self.db.collection("credentials").where("student_id", "==", student_id).stream()
+        ]
+        if not docs:
+            return None
+        docs.sort(key=lambda d: d.get("issued_at", ""), reverse=True)
+        data = docs[0]
+        return Credential(
+            credential_id=data["credential_id"],
+            student_id=data["student_id"],
+            cohort_id=data["cohort_id"],
+            badge_name=data["badge_name"],
+            issued_at=data.get("issued_at", _utcnow_iso()),
+            trace_id=data["trace_id"],
+            metadata=data.get("metadata", {}),
         )
-        for doc in query:
-            data = doc.to_dict()
-            return Credential(
-                credential_id=data["credential_id"],
-                student_id=data["student_id"],
-                cohort_id=data["cohort_id"],
-                badge_name=data["badge_name"],
-                trace_id=data["trace_id"],
-                issued_at=data.get("issued_at", _utcnow_iso()),
-                signature=data.get("signature"),
-            )
-        return None
 
 
 # Global singleton instance for in-memory repo

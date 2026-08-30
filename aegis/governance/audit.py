@@ -130,15 +130,13 @@ class FirestoreAuditLog(BaseAuditLog):
         return entries
 
     def for_subject(self, subject: str) -> List[ActionEnvelope]:
-        docs = (
-            self.db.collection(self.collection_name)
-            .where("subject", "==", subject)
-            .order_by("timestamp", direction="ASCENDING")
-            .stream()
-        )
+        docs = [
+            doc.to_dict()
+            for doc in self.db.collection(self.collection_name).where("subject", "==", subject).stream()
+        ]
+        docs.sort(key=lambda d: d.get("timestamp", ""))
         entries: List[ActionEnvelope] = []
-        for doc in docs:
-            data = doc.to_dict()
+        for data in docs:
             entries.append(
                 ActionEnvelope(
                     actor=data["actor"],
