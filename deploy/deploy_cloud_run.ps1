@@ -29,10 +29,9 @@ gcloud run deploy $ServiceName `
     --min-instances=0 `
     --max-instances=2 `
     --memory="1Gi" `
-    --cpu="1" `
     --service-account="aegis-registrar@$ProjectId.iam.gserviceaccount.com" `
     --set-secrets="AEGIS_HMAC_SECRET=aegis-hmac-secret:latest" `
-    --set-env-vars="USE_FIRESTORE=true,EXPORT_TRACES=true,GCP_PROJECT=$ProjectId,GCP_REGION=$Region,MODEL_REGISTRAR=gemini-3.7-flash,MODEL_ASSESSOR=gemini-3.7-flash,MODEL_ADVERSARY=gemini-3.5-flash-lite,SESSION_DB_URL=sqlite:///./aegis_sessions.db" `
+    --set-env-vars="USE_FIRESTORE=true,EXPORT_TRACES=true,GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_LOCATION=global,GOOGLE_CLOUD_PROJECT=$ProjectId,GCP_PROJECT=$ProjectId,GCP_REGION=$Region,MODEL_REGISTRAR=gemini-3.7-flash,MODEL_ASSESSOR=gemini-3.7-flash,MODEL_ADVERSARY=gemini-3.5-flash-lite,SESSION_DB_URL=sqlite:///./aegis_sessions.db" `
     --quiet
 
 $serviceUrl = gcloud run services describe $ServiceName --platform="managed" --region=$Region --project=$ProjectId --format="value(status.url)"

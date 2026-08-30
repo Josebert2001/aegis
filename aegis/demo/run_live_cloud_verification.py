@@ -8,7 +8,7 @@ import urllib.error
 
 from aegis.demo.fixtures import WEAK_PATCH, STRONG_PATCH
 
-CLOUD_RUN_URL = "https://aegis-fleet-375423947359.us-central1.run.app"
+CLOUD_RUN_URL = os.getenv("CLOUD_RUN_URL", "https://aegis-fleet-375423947359.us-central1.run.app").rstrip("/")
 
 def post_json(endpoint, data):
     url = f"{CLOUD_RUN_URL}{endpoint}"
