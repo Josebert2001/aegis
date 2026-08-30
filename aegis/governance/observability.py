@@ -14,6 +14,7 @@ from typing import Any, Dict, Generator, Optional
 import uuid
 
 from opentelemetry import trace
+from opentelemetry.sdk.resources import Resource, SERVICE_NAME
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import (
     BatchSpanProcessor,
@@ -27,31 +28,46 @@ from aegis.config import settings
 logger = logging.getLogger("aegis.governance.observability")
 
 _tracer_initialized = False
+_cloud_trace_active = False
 _tracer: Optional[Tracer] = None
+
+
+def is_cloud_trace_active() -> bool:
+    """Returns True if the Google Cloud Trace exporter actually initialized without fallback."""
+    return _cloud_trace_active
 
 
 def setup_telemetry() -> Tracer:
     """Initializes OpenTelemetry TracerProvider with Cloud Trace or local console exporter."""
-    global _tracer_initialized, _tracer
+    global _tracer_initialized, _cloud_trace_active, _tracer
 
     if _tracer_initialized and _tracer is not None:
         return _tracer
 
-    provider = TracerProvider()
+    # Set explicit resource with service.name
+    resource = Resource.create({
+        SERVICE_NAME: "aegis-fleet",
+        "service.version": "1.0.0",
+        "deployment.environment": settings.gcp_region,
+    })
+    provider = TracerProvider(resource=resource)
 
     if settings.export_traces:
         try:
-            # Lazy import GCP Cloud Trace exporter
-            from opentelemetry.exporter.gcp_trace import CloudTraceSpanExporter
+            # Correct import for opentelemetry-exporter-gcp-trace package
+            from opentelemetry.exporter.cloud_trace import CloudTraceSpanExporter
 
             cloud_exporter = CloudTraceSpanExporter(project_id=settings.gcp_project)
             provider.add_span_processor(BatchSpanProcessor(cloud_exporter))
-            logger.info("OpenTelemetry initialized with Google Cloud Trace exporter (project=%s)", settings.gcp_project)
+            _cloud_trace_active = True
+            logger.info("OpenTelemetry initialized with Google Cloud Trace exporter (project=%s, service=aegis-fleet)", settings.gcp_project)
         except Exception as exc:
+            _cloud_trace_active = False
             logger.warning("Failed to initialize Google Cloud Trace exporter: %s; falling back to in-memory/console", exc)
             provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter()))
     else:
         # Local development / zero-cloud execution: simple processor
+        _cloud_trace_active = False
         provider.add_span_processor(SimpleSpanProcessor(ConsoleSpanExporter()))
 
     trace.set_tracer_provider(provider)
@@ -93,3 +109,7 @@ def cloud_trace_url(trace_id: str, project_id: Optional[str] = None) -> str:
     """Constructs a direct Google Cloud Console deep link for an OpenTelemetry trace ID."""
     proj = project_id or settings.gcp_project
     return f"https://console.cloud.google.com/traces/traces/{trace_id}?project={proj}"
+
+
+# Run early initialization at module import time
+setup_telemetry()

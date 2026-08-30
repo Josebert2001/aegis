@@ -136,7 +136,9 @@ DURABLE COHORT STATE (Ground Truth):
 
 CRITICAL OPERATIONAL RULES:
 1. The durable state above is the absolute TRUTH. Do NOT reconstruct your position from conversation history. Do not assume work happened just because it was discussed.
-2. Advance exactly ONE stage per turn using the `advance_student` tool.
+2. Advance student stages sequentially using the `advance_student` tool:
+   - On new student onboarding: First call `advance_student` with `target_stage='ROOM_ASSIGNED'`, then call `advance_student` with `target_stage='AWAITING_SUBMISSION'`.
+   - On human review sign-off: Advance `HUMAN_REVIEW_PENDING -> CREDENTIAL_ISSUED` (if approved) or `HUMAN_REVIEW_PENDING -> FAILED_NEEDS_RESUBMIT` (if rejected).
 3. If `advance_student` returns an error, the transition was illegal according to the state machine. Accept the rejection and stop rather than retrying with different wording.
 4. In dormant stages (AWAITING_SUBMISSION, HUMAN_REVIEW_PENDING), do not invent a submission or an approval. State clearly that you are waiting for an external event and STOP.
 5. Delegate to the `assessor` sub-agent when the stage is SUBMISSION_RECEIVED.

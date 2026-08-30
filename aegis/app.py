@@ -22,7 +22,10 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 from google.genai import types
 from google.adk.runners import Runner
+from google.adk.apps import App
+from google.adk.apps.app import ContextCacheConfig
 from google.adk.sessions import DatabaseSessionService, InMemorySessionService
+from google.genai import types
 
 from aegis.config import settings
 from aegis.domain import (
@@ -33,6 +36,7 @@ from aegis.domain import (
     AdversaryVerdict,
     Credential,
     _utcnow_iso,
+    IllegalTransition,
 )
 from aegis.governance.identity import (
     REGISTRAR,
@@ -49,6 +53,7 @@ from aegis.governance.observability import (
     current_trace_id,
     cloud_trace_url,
     get_tracer,
+    is_cloud_trace_active,
 )
 from aegis.store.repository import get_repository
 from aegis.agents.fleet import root_agent
@@ -60,7 +65,7 @@ logging.basicConfig(level=logging.INFO)
 tracer = get_tracer()
 
 # -----------------------------------------------------------------------------
-# ADK Session Service & Runner Initialization
+# ADK App, Session Service & Runner Initialization
 # -----------------------------------------------------------------------------
 
 def _create_session_service():
@@ -87,10 +92,17 @@ def _create_session_service():
 
 
 session_service = _create_session_service()
+
+# Configure ADK App with dedicated ContextCacheConfig to eliminate transfer prompt duplication
+adk_app = App(
+    name="aegis",
+    root_agent=root_agent,
+    context_cache_config=ContextCacheConfig(ttl_seconds=1800),
+)
+
 runner = Runner(
-    agent=root_agent,
+    app=adk_app,
     session_service=session_service,
-    app_name="aegis",
 )
 
 # Initialize FastAPI App
@@ -220,10 +232,11 @@ async def enrol_student(req: EnrolRequest):
     )
     audit.record(env)
 
-    # Wake Registrar Agent
+    # Wake Registrar Agent to complete onboarding
     prompt = (
-        f"New student enrolled: {student.name} (ID: {student.student_id}). "
-        f"Advance them to ROOM_ASSIGNED, assign room '{student.room_id}', and then advance to AWAITING_SUBMISSION."
+        f"Student {student.name} (ID: {student.student_id}) has enrolled in room '{student.room_id}'. "
+        f"Complete the onboarding lifecycle: first call advance_student with target_stage='ROOM_ASSIGNED' "
+        f"to assign room '{student.room_id}', then call advance_student with target_stage='AWAITING_SUBMISSION'."
     )
     state_delta = {
         "current_stage": Stage.ENROLLED.value,
@@ -404,7 +417,7 @@ async def health_check():
         },
         "cloud_flags": {
             "use_firestore": settings.use_firestore,
-            "export_traces": settings.export_traces,
+            "export_traces": is_cloud_trace_active(),
             "use_model_armor": settings.use_model_armor,
         },
         "session_db_url": settings.session_db_url,
