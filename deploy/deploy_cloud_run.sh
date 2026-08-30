@@ -28,7 +28,7 @@ echo "======================================================================"
 echo
 
 # Deploy container from source directory
-ENV_VARS="USE_FIRESTORE=true,EXPORT_TRACES=true,GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION},MODEL_REGISTRAR=gemini-3.7-flash,MODEL_ASSESSOR=gemini-3.7-flash,MODEL_ADVERSARY=gemini-3.5-flash-lite,SESSION_DB_URL=sqlite:///./aegis_sessions.db"
+ENV_VARS="USE_FIRESTORE=true,EXPORT_TRACES=true,GOOGLE_CLOUD_LOCATION=global,GCP_PROJECT=${PROJECT_ID},GCP_REGION=${REGION},MODEL_REGISTRAR=gemini-3.7-flash,MODEL_ASSESSOR=gemini-3.7-flash,MODEL_ADVERSARY=gemini-3.5-flash-lite,SESSION_DB_URL=sqlite:///./aegis_sessions.db"
 if [ -n "${GOOGLE_API_KEY:-}" ]; then
     ENV_VARS="${ENV_VARS},GOOGLE_API_KEY=${GOOGLE_API_KEY}"
 fi

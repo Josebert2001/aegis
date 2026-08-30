@@ -37,6 +37,7 @@ from aegis.domain import (
     Credential,
     _utcnow_iso,
     IllegalTransition,
+    DORMANT_STAGES,
 )
 from aegis.governance.identity import (
     REGISTRAR,
@@ -60,6 +61,13 @@ from aegis.agents.fleet import root_agent
 
 logger = logging.getLogger("aegis.app")
 logging.basicConfig(level=logging.INFO)
+
+# Stages where the agent stops and rests awaiting external webhook signals or terminal status
+RESTING_STAGES = DORMANT_STAGES | {
+    Stage.CREDENTIAL_ISSUED,
+    Stage.FAILED_NEEDS_RESUBMIT,
+    Stage.WITHDRAWN,
+}
 
 # Initialize OpenTelemetry Tracer
 tracer = get_tracer()
@@ -126,10 +134,15 @@ async def _wake(
 
     Derives session_id as 'cohort::{student_id}' so the exact same multi-week
     conversation is resumed every time an event occurs.
+
+    Runtime bounded loop: Continues advancing until the student reaches a dormant
+    (AWAITING_SUBMISSION, HUMAN_REVIEW_PENDING) or terminal stage, or until the stage
+    stops changing (maximum 4 turns).
     """
     with span("agent.wake", {"student_id": student_id, "prompt_preview": prompt[:80]}):
         trace_id = current_trace_id()
         session_id = f"cohort::{student_id}"
+        repo = get_repository()
 
         # 1. Ensure session exists (resume path swallows existing session error)
         try:
@@ -142,30 +155,68 @@ async def _wake(
         except Exception as exc:
             logger.debug("Resuming existing session for student %s (%s)", student_id, exc)
 
-        # 2. Construct message Content
-        new_message = types.Content(
-            role="user",
-            parts=[types.Part.from_text(text=prompt)],
-        )
+        max_turns = 4
+        turn = 0
+        all_responses: List[str] = []
+        current_prompt = prompt
+        current_delta = state_delta
 
-        # 3. Asynchronously execute agent with state_delta applied BEFORE inference
-        response_texts: List[str] = []
-        try:
-            async for event in runner.run_async(
-                user_id=student_id,
-                session_id=session_id,
-                new_message=new_message,
-                state_delta=state_delta,
-            ):
-                if hasattr(event, "content") and event.content:
-                    for part in getattr(event.content, "parts", []):
-                        if getattr(part, "text", None):
-                            response_texts.append(part.text)
-        except Exception as exc:
-            logger.warning("Agent execution note for student %s: %s", student_id, exc)
-            return f"Agent processed signal (offline mode/completed): {exc}", trace_id
+        while turn < max_turns:
+            turn += 1
+            student_before = repo.get_student(student_id)
+            stage_before = student_before.stage if student_before else None
 
-        final_response = "\n".join(response_texts) if response_texts else "Agent processed cohort signal."
+            # Check if student is already in a resting stage on subsequent turns
+            if turn > 1 and stage_before in RESTING_STAGES:
+                break
+
+            new_message = types.Content(
+                role="user",
+                parts=[types.Part.from_text(text=current_prompt)],
+            )
+
+            turn_texts: List[str] = []
+            try:
+                async for event in runner.run_async(
+                    user_id=student_id,
+                    session_id=session_id,
+                    new_message=new_message,
+                    state_delta=current_delta,
+                ):
+                    if hasattr(event, "content") and event.content:
+                        for part in getattr(event.content, "parts", []):
+                            if getattr(part, "text", None):
+                                turn_texts.append(part.text)
+            except Exception as exc:
+                logger.warning("Agent execution note for student %s (turn %d): %s", student_id, turn, exc)
+                all_responses.append(f"Agent processed signal (offline mode/completed): {exc}")
+                break
+
+            if turn_texts:
+                all_responses.append("\n".join(turn_texts))
+
+            student_after = repo.get_student(student_id)
+            stage_after = student_after.stage if student_after else None
+
+            # Stop immediately if reached a resting stage (dormant or terminal)
+            if stage_after in RESTING_STAGES:
+                break
+
+            # Stop immediately if stage did not change to prevent spinning
+            if stage_after == stage_before:
+                break
+
+            # Prepare next turn prompt for intermediate active stage
+            current_prompt = (
+                f"Student {student_id} stage is now {stage_after.value if stage_after else 'UNKNOWN'}. "
+                f"Advance to the next required stage or action according to governance rules."
+            )
+            current_delta = {
+                "current_stage": stage_after.value if stage_after else None,
+                "student_id": student_id,
+            }
+
+        final_response = "\n\n---\n\n".join(all_responses) if all_responses else "Agent processed cohort signal."
         return final_response, trace_id
 
 
